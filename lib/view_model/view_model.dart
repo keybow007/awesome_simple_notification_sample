@@ -4,20 +4,25 @@ import 'package:flutter/foundation.dart';
 class ViewModel extends ChangeNotifier {
   final NotificationManager notificationManager;
 
-
   ViewModel({required this.notificationManager});
+
 
   void initNotificationManager() {
     notificationManager.init();
   }
 
-  void sendNotification() {
-    notificationManager.sendNotification();
+  void sendBasicNotification() {
+    notificationManager.sendBasicNotification();
+    notifyListeners();
+  }
+
+  void sendFullScreenNotification() {
+    notificationManager.sendFullScreenNotification();
+    notifyListeners();
   }
 
   void clearNotification() {
     notificationManager.clearNotification();
+    notifyListeners();
   }
-
-
 }

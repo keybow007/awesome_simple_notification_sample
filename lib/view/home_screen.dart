@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:awesome_simple_notification_sample/model/notification_manager.dart';
 import 'package:awesome_simple_notification_sample/view/second_screen.dart';
 import 'package:awesome_simple_notification_sample/view_model/view_model.dart';
@@ -12,8 +14,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
-  bool isWaitingNotification = false;
-
   @override
   void initState() {
     super.initState();
@@ -43,36 +43,50 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     return Scaffold(
       body: Center(
-        child: (!isWaitingNotification)
-            ? ElevatedButton(
-                onPressed: () => _sendNotification(),
-                child: Text("５秒後にローカル通知を出すで〜"),
-              )
-            : Text("通知来るの待ってるねん"),
-      ),
+          child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          ElevatedButton(
+            onPressed: () => _sendBasicNotification(),
+            child: Text("５秒後に普通の通知を出すで〜"),
+          ),
+          if (Platform.isAndroid)
+            Padding(
+              padding: const EdgeInsets.only(top: 20.0),
+              child: ElevatedButton(
+                onPressed: () => _sendFullScreenNotification(),
+                child: Text("５秒後に全画面インテント出すで〜"),
+              ),
+            ),
+        ],
+      )),
     );
   }
 
-  void _sendNotification() {
+  void _sendBasicNotification() {
     final vm = context.read<ViewModel>();
-    vm.sendNotification();
-    setState(() {
-      this.isWaitingNotification = true;
-    });
+    vm.sendBasicNotification();
+  }
+
+  void _sendFullScreenNotification() {
+    final vm = context.read<ViewModel>();
+    vm.sendFullScreenNotification();
   }
 
   //TODO 通知を押下した際に別の画面を開きたい場合
   void _openSecondScreenWhenNotificationReceived() {
     print("[HomeScreen#_openSecondScreenWhenNotificationReceived]");
-    if ((NotificationManager.receivedNotification?.channelKey !=
-        NotificationManager.channelKey)) return;
-    setState(() {
-      this.isWaitingNotification = false;
-    });
+    final receivedNotification = NotificationManager.receivedNotificationAction;
+    if (receivedNotification == null) return;
     //buildメソッド回っている途中なので、
+    if (receivedNotification.channelKey == null) return;
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => SecondScreen()),
+      MaterialPageRoute(
+        builder: (context) => SecondScreen(
+          notificationChannelKey: receivedNotification.channelKey!,
+        ),
+      ),
     );
     //通知を開いたらValueNotifierをクリア
     final vm = context.read<ViewModel>();

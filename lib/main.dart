@@ -30,7 +30,7 @@ class MyApp extends StatelessWidget {
 
     Future(() {
       //TODO 通知の初期化（通知送信ボタン押す前にやっておく必要あり）
-      if (NotificationManager.receivedNotification != null) return;
+      if (NotificationManager.receivedNotificationAction != null) return;
       final vm = context.read<ViewModel>();
       vm.initNotificationManager();
     });

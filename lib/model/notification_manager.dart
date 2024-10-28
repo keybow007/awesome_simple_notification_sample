@@ -2,13 +2,63 @@ import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/material.dart';
 
 class NotificationManager {
+
   //TODO 通知を押下した際にHomeScreenとは別の画面を開きたい場合
   // => チュートリアルではNamedRouteを使っているが、static変数を使うやり方に
-  static ReceivedAction? receivedNotification = null;
 
-  static String channelKey = "basic_channel";
+  static ReceivedNotification? receivedNotificationAction = null;
 
-  static int id = 1;
+  static const String channelKeyBasic = "basic";
+  static const String channelKeyFullScreen = "full_screen";
+
+  //key: channelKey / value: channelName
+  static Map<String, String> channelMaps = {
+    channelKeyBasic: "Basic",
+    channelKeyFullScreen: "Full Screen",
+  };
+
+  /*
+  * NotificationContent
+  * https://pub.dev/packages/awesome_notifications#notificationcontent-content-in-push-data---required
+  * https://pub.dev/documentation/awesome_notifications/latest/awesome_notifications/NotificationContent-class.html
+  *
+  * Notification Action Types
+  * https://pub.dev/packages/awesome_notifications#-notification-action-types
+  *
+  * Notification's Category
+  * https://pub.dev/packages/awesome_notifications#-notification-action-types
+  * */
+  final notificationContentBasic = NotificationContent(
+    //idを変えれば複数のアラームが設定できる
+    id: 1,
+    channelKey: channelKeyBasic,
+    actionType: ActionType.Default,
+    title: 'シンプルな通知',
+    body: '普通の通知出したで〜',
+    category: NotificationCategory.Alarm,
+  );
+
+  final notificationContentFullScreen = NotificationContent(
+    fullScreenIntent: true,
+    //公式のサンプル見たら、これをtrueにしてた => マニフェストファイルで「WAKE_LOCK」パーミッション設定要
+    // => これをtrueにすると、通知イベント発生時にアプリが自動で開くようだ
+    //https://pub.dev/packages/awesome_notifications#-wake-up-screen-notifications
+    wakeUpScreen: true,
+    //idを変えれば複数のアラームが設定できる
+    id: 2,
+    channelKey: channelKeyFullScreen,
+    actionType: ActionType.Default,
+    title: '全画面通知',
+    body: '全画面通知出したで〜',
+    category: NotificationCategory.Alarm,
+  );
+
+  /*
+  * NotificationSchedule
+  * https://pub.dev/packages/awesome_notifications#-scheduling-a-notification
+  * https://pub.dev/packages/awesome_notifications#schedules
+  * */
+  NotificationSchedule? schedule;
 
   /*
   * TODO:awesome_notificationプラグインの初期化
@@ -19,24 +69,33 @@ class NotificationManager {
     /*
     * AwesomeNotifications#initialize
     * https://pub.dev/documentation/awesome_notifications/latest/i_awesome_notifications/IAwesomeNotifications/initialize.html
+    *
+    * Androidの通知設定方法（Android公式）
+    * https://developer.android.com/develop/ui/views/notifications?hl=ja#Templates
+    * 通知チャンネル
+    * https://developer.android.com/develop/ui/views/notifications?hl=ja#ManageChannels
+    * NotificationChannel
+    * https://pub.dev/packages/awesome_notifications#-notification-channels
+    * https://pub.dev/packages/awesome_notifications#notification-channel-attributes
     * */
     AwesomeNotifications().initialize(
       //android用の通知アイコンの設定要（android/app/src/main/res/drawableフォルダ内に）
       'resource://drawable/app_icon',
       [
+        //普通の通知
         NotificationChannel(
-          /*
-          * Androidの通知設定方法（Android公式）
-          * https://developer.android.com/develop/ui/views/notifications?hl=ja#Templates
-          * 通知チャンネル
-          * https://developer.android.com/develop/ui/views/notifications?hl=ja#ManageChannels
-          * NotificationChannel
-          * https://pub.dev/packages/awesome_notifications#-notification-channels
-          * https://pub.dev/packages/awesome_notifications#notification-channel-attributes
-          * */
-          channelKey: channelKey,
-          channelName: "Notification",
+          channelKey: channelKeyBasic,
+          channelName: channelMaps[channelKeyBasic],
           channelDescription: "シンプルな通知",
+          importance: NotificationImportance.Max,
+        ),
+        //全画面インテント（Full Screen Notifications (only for Android)）
+        //https://pub.dev/packages/awesome_notifications#-full-screen-notifications-only-for-android
+        //https://source.android.com/docs/core/permissions/fsi-limits?hl=ja
+        NotificationChannel(
+          channelKey: channelKeyFullScreen,
+          channelName: channelMaps[channelKeyFullScreen],
+          channelDescription: "全画面通知（Androidのみ）",
           importance: NotificationImportance.Max,
         ),
       ],
@@ -49,9 +108,11 @@ class NotificationManager {
     *  https://pub.dev/packages/awesome_notifications#-how-to-show-local-notifications
     *  => onActionReceivedMethodのみ必須
     *   https://pub.dev/packages/awesome_notifications#-notification-events
+    *   （注）WakeLockの仕組みを使って通知表示と同時にアプリを自動で開きたい場合はonNotificationDisplayedMethod設定要
     * */
     AwesomeNotifications().setListeners(
       onActionReceivedMethod: onActionReceivedMethod,
+      onNotificationDisplayedMethod: onNotificationDisplayedMethod,
     );
 
     /*
@@ -68,6 +129,18 @@ class NotificationManager {
         AwesomeNotifications().requestPermissionToSendNotifications();
       }
     });
+
+    schedule = NotificationInterval(
+      //The amount of seconds between each notification repetition. Must be greater than 0 or 60 if repeating.
+      interval: Duration(seconds: 5),
+      repeats: false,
+      preciseAlarm: true,
+      timeZone: await AwesomeNotifications().getLocalTimeZoneIdentifier(),
+      //[android] これをtrueにしておかないとステータスバーにちゃんと通知が出てくれないみたい
+      //determines whether the notification will be sent even when the device is in a critical situation, such as low battery.
+      //https://pub.dev/documentation/awesome_notifications/latest/awesome_notifications/NotificationSchedule/allowWhileIdle.html
+      allowWhileIdle: true,
+    );
   }
 
   /*
@@ -79,8 +152,7 @@ class NotificationManager {
   @pragma("vm:entry-point")
   static Future<void> onActionReceivedMethod(
       ReceivedAction receivedAction) async {
-    print("[通知受診したで〜:onActionReceivedMethod]$receivedAction");
-    // Your code goes here
+    print("[通知をユーザーがクリックしたで〜:onActionReceivedMethod]$receivedAction");
 
     // 通知押下時にHomeScreenとは別の画面を開きたい場合
     // チュートリアルにはnamedRouteを使う方法が紹介されているが、ちょっとややこしいのでstatic変数を使うやり方にしてみる
@@ -89,55 +161,37 @@ class NotificationManager {
     //         (route) => (route.settings.name != '/notification-page') || route.isFirst,
     //     arguments: receivedAction);
     //iOSの場合はこっちで受けないと駄目みたい（onNotificationDisplayedMethodでは受けてくれない）
-    receivedNotification = receivedAction;
+    receivedNotificationAction = receivedAction;
   }
 
-  void sendNotification() async {
-    //TODO 通知の作成（リンク先の手順7）
+  /// Use this method to detect every time that a new notification is displayed
+  /// Fires when a notification is displayed on system status bar
+  @pragma("vm:entry-point")
+  static Future <void> onNotificationDisplayedMethod(ReceivedNotification receivedNotification) async {
+    /*
+    * 通知がステータスバーに表示されてもこのコールバック呼ばれない（Android・iOSともに）？？
+    * */
+    print("[通知が表示されたで〜:onActionReceivedMethod]$receivedNotification");
+    receivedNotificationAction = receivedNotification;
+  }
+
+  void sendBasicNotification() async {
+    //通知の作成（リンク先の手順7）
     //https://pub.dev/packages/awesome_notifications#-how-to-show-local-notifications
     AwesomeNotifications().createNotification(
-      /*
-        * NotificationContent
-        * https://pub.dev/packages/awesome_notifications#notificationcontent-content-in-push-data---required
-        * https://pub.dev/documentation/awesome_notifications/latest/awesome_notifications/NotificationContent-class.html
-        * */
-      content: NotificationContent(
-        //idを変えれば複数のアラームが設定できる！ => 関さんのアプリの場合は不要
-        id: 1,
-        channelKey: channelKey,
-        /*
-          * Notification Action Types
-          * https://pub.dev/packages/awesome_notifications#-notification-action-types
-          * */
-        actionType: ActionType.Default,
-        title: 'シンプルな通知',
-        body: '通知出したで〜',
-        /*
-          * Notification's Category
-          * https://pub.dev/packages/awesome_notifications#-notification-action-types
-          * */
-        //これがないとAndroidでは通知がステータスバーに表示されないみたい
-        category: NotificationCategory.Reminder,
-        //category: NotificationCategory.Alarm,
-      ),
-      /*
-      * 一定期間後に通知を出す方法（Scheduling a Notification）
-      * https://pub.dev/packages/awesome_notifications#-scheduling-a-notification
-      * */
-      schedule: NotificationInterval(
-        //The amount of seconds between each notification repetition. Must be greater than 0 or 60 if repeating.
-        interval: 5,
-        repeats: false,
-        preciseAlarm: true,
-        timeZone: await AwesomeNotifications().getLocalTimeZoneIdentifier(),
-        //TODO[android] これをtrueにしておかないと２回目以降の通知を出してくれない
-        //determines whether the notification will be sent even when the device is in a critical situation, such as low battery.
-        allowWhileIdle: true,
-      ),
+      content: notificationContentBasic,
+      schedule: schedule,
+    );
+  }
+
+  void sendFullScreenNotification() {
+    AwesomeNotifications().createNotification(
+      content: notificationContentFullScreen,
+      schedule: schedule,
     );
   }
 
   void clearNotification() {
-    receivedNotification = null;
+    receivedNotificationAction = null;
   }
 }
